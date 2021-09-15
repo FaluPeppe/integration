@@ -1,5 +1,4 @@
 library(pxweb)
-library(httr)             # för att komma förbi brandväggen
 library(writexl)
 library(dplyr)
 library(readr)            # för att använda parse_number
@@ -19,7 +18,8 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
                                      skriv_till_Excelfil = FALSE,
                                      output_mapp_xls = "G:\\Samhällsanalys\\API\\Fran_R\\integration\\",
                                      output_mapp = "G:\\Samhällsanalys\\API\\Fran_R\\integration\\",
-                                     logga_path = "G:/Samhällsanalys/MallarLoggor/logo_liggande_fri_svart.png",
+                                     logga_path,
+                                     diagram_capt = "",
                                      bara_en_region = TRUE
                                      ){
   geo_riket <- FALSE
@@ -100,12 +100,6 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   filnamn_diagram <- paste0(huvudnamn, suffix,".png")
   filnamn_xls <- paste0(huvudnamn, suffix,".xlsx")
   
-  # =====================================================================================
-  
-  
-  # För att komma förbi proxyn
-  set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, username = Sys.getenv("userid"), password = Sys.getenv("pwd")))
-  set_config(config(ssl_verifypeer = 0L))
   
   
   # ================ Hämta tabell från SCB =============================================
@@ -194,7 +188,7 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
           panel.grid.minor.x = element_blank()) +
     labs(title = diagramtitel, 
          x = element_blank(),
-         caption = "Källa: SCB\nBearbetning: Peter Möller, Region Dalarna") +
+         caption = diagram_capt) +
     {if (is.na(y_titel)){
       labs(y = element_blank())
     } else {
@@ -224,27 +218,16 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   
   # Lägg till logga till diagrammet =======================================
   
-  # beskär så vi tar bort det vita fältet under legend och caption
-  #image_write(image_crop(image_read(fullpath),geometry = "3600x2000"), 
-  #            fullpath)
-  
-  #plot_with_logo <- 
-  add_logo(
-    plot_path = paste0(output_mapp, filnamn_diagram), # url or local file for the plot
-    logo_path = logga_path, # url or local file for the logo
-    logo_position = "bottom right", # choose a corner
-    # 'top left', 'top right', 'bottom left' or 'bottom right'
-    logo_scale = 15,
-    #10 as default, but can change to manually make logo bigger (lägre tal = större logga)
-    replace = TRUE
-  )
+  if (!is.null(logga_path)){  
+    add_logo(
+      plot_path = paste0(output_mapp, filnamn_diagram), # url or local file for the plot
+      logo_path = logga_path, # url or local file for the logo
+      logo_position = "bottom right", # choose a corner
+      # 'top left', 'top right', 'bottom left' or 'bottom right'
+      logo_scale = 15,
+      #10 as default, but can change to manually make logo bigger (lägre tal = större logga)
+      replace = TRUE
+    )
+  }
+# slut på funktionen
 }
-
-
-# ===================== Interaktiv sökning i statistikdatabasen ========================
-
-# För att interaktivt söka i pxweb-databaser
-#pxweb_interactive()
-
-# Interaktiv sökning - direktingång till SCB:s statistikdatabas
-# pxweb_interactive("http://api.scb.se/OV0104/v1/doris/sv/ssd/")
