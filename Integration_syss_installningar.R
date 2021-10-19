@@ -1,10 +1,9 @@
 # Skript som anropar func_INtegration_syss.R för att skapa diagram och spara dem som .png-filer
-library(httr)             # för att komma förbi brandväggen
+
 
 # ================================ Här gör vi inställningar  ==============================================
 
 source("G:/Samhällsanalys/Automatisering och R/Skript/integration/func_Integration_syss.R", encoding = "utf-8", echo = FALSE)
-
 options(dplyr.summarise.inform = FALSE)
 
 # --------------------------- inställning för hela skriptet - ändras sällan -------------------------------------
@@ -20,29 +19,25 @@ diagram_capt <- "Källa: SCB:s befolkningsprognos\nBearbetning: Peter Möller, R
 # --------------------------- inställningar som görs per körning ------------------------------------------
 
 # Välj region med kommun- eller länskod. Välj "riket" TRUE om vi vill hämta ner statistik om riket, FALSE om vi vill hämta statistik om Dalarna
-vald_region <- c("2080")          # man kan välja flera  2034, 2039, 2062
+vald_region <- c("2081")          # man kan välja flera  2034, 2039, 2062
 
-huvudnamn <- c("integration_syss_lagutb", 
-               "integration_syss_nyanl",
-               "integration_syss_utrFodd",
-               "integration_syss_utomeurpFodd")
+bara_en_region <- FALSE         # om TRUE så visas bara den eller de regioner som valts i raden ovan, annars jämförs
+# med regionens övriga kommuner, gäller bara om kommuner väljs
+
+huvudnamn <- c("integration_syss_lagutb", "integration_syss_gymn_utb", "integration_syss_hogutb")
+# alla rapporter:
+#c("integration_syss_lagutb", "integration_syss_nyanl", "integration_syss_utrFodd", "integration_syss_utomeurpFodd")
 
 
 # övriga förinställda diagram som finns (och som läggs som huvudnamn):
 # integration_syss_utrFodd
 # integration_syss_utomeurpFodd
 # integration_syss_lagutb
+# integration_syss_gymn_utb
+# integration_syss_hogutb
 # integration_syss_nyanl
 
-bara_en_region <- TRUE         # om TRUE så visas bara den eller de regioner som valts i raden ovan, annars jämförs
-# med regionens övriga kommuner, gäller bara om kommuner väljs
-
-
-# För att komma förbi proxyn
-set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, username = Sys.getenv("userid"), password = Sys.getenv("pwd")))
-set_config(config(ssl_verifypeer = 0L))
-
-
+ladda_ned_api <- TRUE
 for (rapportlista in 1:length(huvudnamn)) {
   for (reglista in 1:length(vald_region)){
     SkapaIntegrationsDiagram(huvudnamn[rapportlista], 
@@ -52,12 +47,7 @@ for (rapportlista in 1:length(huvudnamn)) {
                              output_mapp, 
                              logga_path,
                              diagram_capt,
-                             bara_en_region)
+                             bara_en_region,
+                             ladda_ned_api)
   }
 }
-
-
-
-
-
-

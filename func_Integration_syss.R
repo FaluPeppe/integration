@@ -7,6 +7,7 @@ library(grid)
 library(png)
 library(ggrepel)
 library(RColorBrewer)
+library(httr)             # för att komma förbi brandväggen
 
 source("G:/Samhällsanalys/Automatisering och R/Skript/func_logga_i_diagram.R", encoding = "utf-8", echo = FALSE)
 source("G:/Samhällsanalys/Automatisering och R/Skript/API_func.R", encoding = "utf-8", echo = FALSE)
@@ -20,8 +21,13 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
                                      output_mapp = "G:\\Samhällsanalys\\API\\Fran_R\\integration\\",
                                      logga_path,
                                      diagram_capt = "",
-                                     bara_en_region = TRUE
+                                     bara_en_region = TRUE,
+                                     ladda_ned_api = TRUE
                                      ){
+  # För att komma förbi proxyn
+  set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, username = Sys.getenv("userid"), password = Sys.getenv("pwd")))
+  set_config(config(ssl_verifypeer = 0L))
+  
   geo_riket <- FALSE
   if (tolower(vald_region) == "riket" | vald_region == "00") geo_riket <- TRUE  
   
@@ -31,8 +37,8 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   kon_filter = "kön == 'män och kvinnor'"
   utb_filter = "utbildningsnivå == 'samtliga utbildningsnivåer'"
     
-  # Lägg in "procent" som titel på y-axeln om andel förvärvsarbetande visaas
-  if (summeringsvariabel == "Andel förvärvsarbetande, procent") {
+  # Lägg in "procent" som titel på y-axeln om "procent" finns med i summeringsvariabeln
+  if (grepl("procent", summeringsvariabel)) {
     y_titel <- "procent"
   } else {
     y_titel <- NA
@@ -41,6 +47,14 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   
   if (huvudnamn == "integration_syss_lagutb"){
     utb_filter <- "utbildningsnivå == 'utbildningsnivå: förgymnasial utbildning'" 
+    bakgrundsvar_filter <- "bakgrundsvariabel == 'födelseregion: Sverige' | bakgrundsvariabel == 'samtliga utrikes födda'"
+    
+  } else if (huvudnamn == "integration_syss_gymn_utb"){
+    utb_filter <- "utbildningsnivå == 'utbildningsnivå: gymnasial utbildning'" 
+    bakgrundsvar_filter <- "bakgrundsvariabel == 'födelseregion: Sverige' | bakgrundsvariabel == 'samtliga utrikes födda'"
+      
+  } else if (huvudnamn == "integration_syss_hogutb"){
+    utb_filter <- "utbildningsnivå == 'utbildningsnivå: eftergymnasial utbildning'" 
     bakgrundsvar_filter <- "bakgrundsvariabel == 'födelseregion: Sverige' | bakgrundsvariabel == 'samtliga utrikes födda'"
     
   } else if (huvudnamn == "integration_syss_nyanl"){
@@ -158,27 +172,32 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
                          "Andel förvärvsarbetande 20-64 år", summeringsvariabel)
   sumvar_titel <- ifelse(utb_filter == "utbildningsnivå == 'utbildningsnivå: förgymnasial utbildning'",
                          paste0(sumvar_titel, " lågutbildade (ej gymnasieutbildning)"),sumvar_titel)
+  sumvar_titel <- ifelse(utb_filter == "utbildningsnivå == 'utbildningsnivå: gymnasial utbildning'",
+                         paste0(sumvar_titel, " gymnasieutbildade"),sumvar_titel)
+  sumvar_titel <- ifelse(utb_filter == "utbildningsnivå == 'utbildningsnivå: eftergymnasial utbildning'",
+                         paste0(sumvar_titel, " högutbildade (eftergymnasial utbildning)"),sumvar_titel)
   
   # ===================================================================================================================
   
   
   # diagramfärger
   chart_col <- brewer.pal(name="Greens", n=9)[c(4,6,8,9)]
-  diagramtitel <- paste0(sumvar_titel," i ", AktuellRegion)
+  diagramtitel <- paste0(sumvar_titel,"\ni ", AktuellRegion)
   
   
   p<-plot_df %>% 
     ggplot(aes(x=år, y=antal, fill = bakgrundsvariabel)) +
     geom_bar(position = "dodge", stat="identity")+
-      theme(axis.text.x = element_text(size = 10.5, angle = 45),
-          axis.text.y = element_text(size = 12),
+      theme(axis.text.x = element_text(size = 8, angle = 45),
+          axis.text.y = element_text(size = 8),
+          axis.title.y = element_text(size = 8),
           axis.ticks = element_blank(),
           legend.position = "bottom",
           legend.margin = margin(-10,0,0,0),
           legend.title = element_blank(),
-          legend.text = element_text(size = 12),
-          plot.title = element_text(hjust = 0.5, size = 20),
-          plot.caption = element_text(face = "italic",
+          #legend.text = element_text(size = 12),
+          plot.title = element_text(hjust = 0.5),
+          plot.caption = element_text(face = "italic", size = 5,
                                       hjust = 0, vjust = 0),
           plot.caption.position = "plot",
           panel.background = element_rect(fill = "white"),
@@ -212,6 +231,14 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   # Ändra höjd och bredd på den sparade png-filen, + ange mapp och filnamn
   bredd <- 12
   hojd <- 7
+  
+  # Ändra höjd och bredd på den sparade png-filen utifrån hur många regioner
+  # som är med i diagrammet, + ange mapp och filnamn
+  bredd <- ifelse(length(unique(plot_df$region)) == 1, 7, 13)
+  hojd <- ifelse(length(unique(plot_df$region)) == 1, 4, 8)
+  # och om det är fler än 20 kommuner
+  bredd <- ifelse(length(unique(plot_df$region)) > 20 , 19, bredd)
+  hojd <- ifelse(length(unique(plot_df$region)) > 20, 12, hojd)
   
   fullpath <- paste0(output_mapp, filnamn_diagram)
   ggsave(fullpath, width = bredd, height = hojd)
