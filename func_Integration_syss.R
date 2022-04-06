@@ -9,9 +9,9 @@ library(ggrepel)
 library(RColorBrewer)
 library(httr)             # för att komma förbi brandväggen
 
-source("G:/Samhällsanalys/Automatisering och R/Skript/func_logga_i_diagram.R", encoding = "utf-8", echo = FALSE)
-source("G:/Samhällsanalys/Automatisering och R/Skript/API_func.R", encoding = "utf-8", echo = FALSE)
-
+source("G:/skript/func/func_logga_i_diagram.R", encoding = "utf-8", echo = FALSE)
+source("G:/skript/func/func_API.R", encoding = "utf-8", echo = FALSE)
+source("G:/skript/func/func_SkapaDiagram.R", encoding = "utf-8", echo = FALSE)
 
 
 SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd", 
@@ -22,7 +22,8 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
                                      logga_path,
                                      diagram_capt = "",
                                      bara_en_region = TRUE,
-                                     ladda_ned_api = TRUE
+                                     ladda_ned_api = TRUE,
+                                     dataetiketter = dataetiketter
                                      ){
   # För att komma förbi proxyn
   set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, username = Sys.getenv("userid"), password = Sys.getenv("pwd")))
@@ -144,6 +145,8 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   # Spara som Excel-fil
   if (skriv_till_Excelfil == TRUE) write_xlsx(px_df,paste0(output_mapp_xls, filnamn_xls))
   
+  # justering för att det nog är ny summeringsvariabeltext i databasen from 2019
+  if ("Andel förvärvsarbetande (ny definition från och med 2019)" %in% names(px_df)) summeringsvariabel <- "Andel förvärvsarbetande (ny definition från och med 2019)"
   
   # ===================================== Gör diagram =====================================================
   
@@ -168,7 +171,7 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   plot_df$bakgrundsvariabel[plot_df$bakgrundsvariabel == "samtliga utrikes födda"] <- "utrikes födda"
   plot_df$region <- ifelse(plot_df$region == "Riket", "Sverige", plot_df$region)
   
-  sumvar_titel <- ifelse(summeringsvariabel == "Andel förvärvsarbetande, procent", 
+  sumvar_titel <- ifelse(summeringsvariabel == "Andel förvärvsarbetande, procent" | summeringsvariabel == "Andel förvärvsarbetande (ny definition från och med 2019)", 
                          "Andel förvärvsarbetande 20-64 år", summeringsvariabel)
   sumvar_titel <- ifelse(utb_filter == "utbildningsnivå == 'utbildningsnivå: förgymnasial utbildning'",
                          paste0(sumvar_titel, " lågutbildade (ej gymnasieutbildning)"),sumvar_titel)
@@ -177,6 +180,8 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   sumvar_titel <- ifelse(utb_filter == "utbildningsnivå == 'utbildningsnivå: eftergymnasial utbildning'",
                          paste0(sumvar_titel, " högutbildade (eftergymnasial utbildning)"),sumvar_titel)
   
+  if (AktuellRegion == "Riket") AktuellRegion <- "Sverige"
+  
   # ===================================================================================================================
   
   
@@ -184,77 +189,92 @@ SkapaIntegrationsDiagram <- function(huvudnamn = "integration_syss_utrFodd",
   chart_col <- brewer.pal(name="Greens", n=9)[c(4,6,8,9)]
   diagramtitel <- paste0(sumvar_titel,"\ni ", AktuellRegion)
   
+  p <- SkapaStapelDiagram(skickad_df = plot_df,
+                          skickad_x_var = "år",
+                          skickad_y_var = "antal",
+                          skickad_x_grupp = "bakgrundsvariabel",
+                          diagram_titel = diagramtitel,
+                          diagram_capt = diagram_capt,
+                          output_mapp = output_mapp,
+                          filnamn_diagram = filnamn_diagram,
+                          manual_color = chart_col,
+                          #manual_x_axis_text_hjust = 1,
+                          #manual_x_axis_text_vjust = 1,
+                          manual_y_axis_title = "procent",
+                          y_axis_100proc = TRUE,
+                          dataetiketter = dataetiketter)
   
-  p<-plot_df %>% 
-    ggplot(aes(x=år, y=antal, fill = bakgrundsvariabel)) +
-    geom_bar(position = "dodge", stat="identity")+
-      theme(axis.text.x = element_text(size = 8, angle = 45),
-          axis.text.y = element_text(size = 8),
-          axis.title.y = element_text(size = 8),
-          axis.ticks = element_blank(),
-          legend.position = "bottom",
-          legend.margin = margin(-10,0,0,0),
-          legend.title = element_blank(),
-          #legend.text = element_text(size = 12),
-          plot.title = element_text(hjust = 0.5),
-          plot.caption = element_text(face = "italic", size = 5,
-                                      hjust = 0, vjust = 0),
-          plot.caption.position = "plot",
-          panel.background = element_rect(fill = "white"),
-          panel.grid.major.y = element_line(size=0.8, colour = "lightgrey"),
-          panel.grid.minor.y = element_line(size=0.4, colour = "lightgrey") ,
-          panel.grid.major.x = element_blank(),
-          panel.grid.minor.x = element_blank()) +
-    labs(title = diagramtitel, 
-         x = element_blank(),
-         caption = diagram_capt) +
-    {if (is.na(y_titel)){
-      labs(y = element_blank())
-    } else {
-      labs(y = y_titel)
-    }} +
-    scale_fill_manual(values=chart_col) +
-    scale_y_continuous(limits = c(0,100),
-                       breaks = seq(0, 100, by = 10), 
-                       minor_breaks = seq(0, 100, by = 2)) +
-    facet_wrap(~ region, scales = "free") +
-    {if(length(unique(plot_df$region)) == 1){
-      theme(strip.text = element_blank())
-    } else {  
-      theme(strip.text = element_text(color = "black"),
-            strip.background = element_blank(),
-            axis.text.x = element_text(size = 6))
-      }}
-  
-  #p 
-  
-  # Ändra höjd och bredd på den sparade png-filen, + ange mapp och filnamn
-  bredd <- 12
-  hojd <- 7
-  
-  # Ändra höjd och bredd på den sparade png-filen utifrån hur många regioner
-  # som är med i diagrammet, + ange mapp och filnamn
-  bredd <- ifelse(length(unique(plot_df$region)) == 1, 7, 13)
-  hojd <- ifelse(length(unique(plot_df$region)) == 1, 4, 8)
-  # och om det är fler än 20 kommuner
-  bredd <- ifelse(length(unique(plot_df$region)) > 20 , 19, bredd)
-  hojd <- ifelse(length(unique(plot_df$region)) > 20, 12, hojd)
-  
-  fullpath <- paste0(output_mapp, filnamn_diagram)
-  ggsave(fullpath, width = bredd, height = hojd)
+
+  # p<-plot_df %>% 
+  #   ggplot(aes(x=år, y=antal, fill = bakgrundsvariabel)) +
+  #   geom_bar(position = "dodge", stat="identity")+
+  #     theme(axis.text.x = element_text(size = 8, angle = 45),
+  #         axis.text.y = element_text(size = 8),
+  #         axis.title.y = element_text(size = 8),
+  #         axis.ticks = element_blank(),
+  #         legend.position = "bottom",
+  #         legend.margin = margin(-10,0,0,0),
+  #         legend.title = element_blank(),
+  #         #legend.text = element_text(size = 12),
+  #         plot.title = element_text(hjust = 0.5),
+  #         plot.caption = element_text(face = "italic", size = 5,
+  #                                     hjust = 0, vjust = 0),
+  #         plot.caption.position = "plot",
+  #         panel.background = element_rect(fill = "white"),
+  #         panel.grid.major.y = element_line(size=0.8, colour = "lightgrey"),
+  #         panel.grid.minor.y = element_line(size=0.4, colour = "lightgrey") ,
+  #         panel.grid.major.x = element_blank(),
+  #         panel.grid.minor.x = element_blank()) +
+  #   labs(title = diagramtitel, 
+  #        x = element_blank(),
+  #        caption = diagram_capt) +
+  #   {if (is.na(y_titel)){
+  #     labs(y = element_blank())
+  #   } else {
+  #     labs(y = y_titel)
+  #   }} +
+  #   scale_fill_manual(values=chart_col) +
+  #   scale_y_continuous(limits = c(0,100),
+  #                      breaks = seq(0, 100, by = 10), 
+  #                      minor_breaks = seq(0, 100, by = 2)) +
+  #   facet_wrap(~ region, scales = "free") +
+  #   {if(length(unique(plot_df$region)) == 1){
+  #     theme(strip.text = element_blank())
+  #   } else {  
+  #     theme(strip.text = element_text(color = "black"),
+  #           strip.background = element_blank(),
+  #           axis.text.x = element_text(size = 6))
+  #     }}
+  # 
+  # #p 
+  # 
+  # # Ändra höjd och bredd på den sparade png-filen, + ange mapp och filnamn
+  # bredd <- 12
+  # hojd <- 7
+  # 
+  # # Ändra höjd och bredd på den sparade png-filen utifrån hur många regioner
+  # # som är med i diagrammet, + ange mapp och filnamn
+  # bredd <- ifelse(length(unique(plot_df$region)) == 1, 7, 13)
+  # hojd <- ifelse(length(unique(plot_df$region)) == 1, 4, 8)
+  # # och om det är fler än 20 kommuner
+  # bredd <- ifelse(length(unique(plot_df$region)) > 20 , 19, bredd)
+  # hojd <- ifelse(length(unique(plot_df$region)) > 20, 12, hojd)
+  # 
+  # fullpath <- paste0(output_mapp, filnamn_diagram)
+  # ggsave(fullpath, width = bredd, height = hojd)
   
   # Lägg till logga till diagrammet =======================================
   
-  if (!is.null(logga_path)){  
-    add_logo(
-      plot_path = paste0(output_mapp, filnamn_diagram), # url or local file for the plot
-      logo_path = logga_path, # url or local file for the logo
-      logo_position = "bottom right", # choose a corner
-      # 'top left', 'top right', 'bottom left' or 'bottom right'
-      logo_scale = 15,
-      #10 as default, but can change to manually make logo bigger (lägre tal = större logga)
-      replace = TRUE
-    )
-  }
+  # if (!is.null(logga_path)){  
+  #   add_logo(
+  #     plot_path = paste0(output_mapp, filnamn_diagram), # url or local file for the plot
+  #     logo_path = logga_path, # url or local file for the logo
+  #     logo_position = "bottom right", # choose a corner
+  #     # 'top left', 'top right', 'bottom left' or 'bottom right'
+  #     logo_scale = 15,
+  #     #10 as default, but can change to manually make logo bigger (lägre tal = större logga)
+  #     replace = TRUE
+  #   )
+  # }
 # slut på funktionen
 }
